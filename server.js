@@ -1,71 +1,47 @@
-import express from "express";
-import bodyParser from "body-parser";
-import { google } from "googleapis";
-import fs from "fs";
+// server.js
+import express from 'express';
+import bodyParser from 'body-parser';
+import { google } from 'googleapis';
+import cors from 'cors';
+import serviceAccount from './service-account.json' assert { type: "json" };
 
 const app = express();
+app.use(cors());
 app.use(bodyParser.json());
 
-// Cargar credenciales de service-account.json
-const credentials = JSON.parse(fs.readFileSync("service-account.json", "utf8"));
-
-const SCOPES = ["https://www.googleapis.com/auth/calendar"];
+const SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const auth = new google.auth.JWT(
-  credentials.client_email,
+  serviceAccount.client_email,
   null,
-  credentials.private_key,
+  serviceAccount.private_key,
   SCOPES
 );
 
-const calendar = google.calendar({ version: "v3", auth });
+const calendar = google.calendar({ version: 'v3', auth });
+const CALENDAR_ID = '0852db9a9c8f7d3de116efe057a11fb1716914caa21833cd0b0b26a93c8c259c@group.calendar.google.com';
 
-// Ruta para listar eventos del calendario
-app.get("/events", async (req, res) => {
+app.post('/add-event', async (req, res) => {
   try {
-    const result = await calendar.events.list({
-      calendarId: process.env.CALENDAR_ID, // Configura este en Render
-      timeMin: new Date().toISOString(),
-      singleEvents: true,
-      orderBy: "startTime",
-    });
-    res.json(result.data.items);
-  } catch (err) {
-    console.error("Error al obtener eventos:", err);
-    res.status(500).send("Error al obtener eventos");
-  }
-});
-
-// Ruta para crear evento
-app.post("/events", async (req, res) => {
-  try {
-    const { nombre, telefono, email, direccion, fecha, hora, servicio, nota } =
-      req.body;
+    const { nombre, telefono, email, direccion, fecha, hora, servicio, nota } = req.body;
 
     const startDateTime = new Date(`${fecha}T${hora}:00`);
-    const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 1h
+    const endDateTime = new Date(startDateTime.getTime() + 60*60*1000); // 1 hora
 
     const event = {
-      summary: `${servicio} - ${nombre}`,
+      summary: nombre,
       location: direccion,
-      description: `Tel: ${telefono}\nEmail: ${email}\nNotas: ${nota}`,
-      start: { dateTime: startDateTime, timeZone: "America/Chicago" },
-      end: { dateTime: endDateTime, timeZone: "America/Chicago" },
+      description: `Tel: ${telefono}\nEmail: ${email}\nServicio: ${servicio}\nNota: ${nota}`,
+      start: { dateTime: startDateTime.toISOString() },
+      end: { dateTime: endDateTime.toISOString() },
     };
 
-    const response = await calendar.events.insert({
-      calendarId: process.env.CALENDAR_ID,
-      requestBody: event,
-    });
-
-    res.json(response.data);
+    await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
+    res.json({ success: true, message: 'Evento agregado' });
   } catch (err) {
-    console.error("Error al crear evento:", err);
-    res.status(500).send("Error al crear evento");
+    console.error(err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Render usa su propio puerto
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor escuchando en puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
