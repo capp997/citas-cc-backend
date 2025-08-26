@@ -1,84 +1,71 @@
 import express from "express";
 import bodyParser from "body-parser";
-import cors from "cors";
 import { google } from "googleapis";
-import { readFile } from "fs/promises";
+import fs from "fs";
 
 const app = express();
-app.use(cors());
 app.use(bodyParser.json());
 
-// === CONFIGURAR GOOGLE CALENDAR ===
+// Cargar credenciales de service-account.json
+const credentials = JSON.parse(fs.readFileSync("service-account.json", "utf8"));
+
 const SCOPES = ["https://www.googleapis.com/auth/calendar"];
-const calendarId = "0852db9a9c8f7d3de116efe057a11fb1716914caa21833cd0b0b26a93c8c259c@group.calendar.google.com";
+const auth = new google.auth.JWT(
+  credentials.client_email,
+  null,
+  credentials.private_key,
+  SCOPES
+);
 
-// Autenticación con service-account.json
-async function getAuthClient() {
-  const keyFile = JSON.parse(await readFile("service-account.json", "utf-8"));
-  const auth = new google.auth.GoogleAuth({
-    credentials: keyFile,
-    scopes: SCOPES,
-  });
-  return auth;
-}
+const calendar = google.calendar({ version: "v3", auth });
 
-// === RUTA: Agregar evento ===
-app.post("/add-event", async (req, res) => {
+// Ruta para listar eventos del calendario
+app.get("/events", async (req, res) => {
   try {
-    const { nombre, telefono, email, direccion, fecha, hora, servicio, nota } = req.body;
+    const result = await calendar.events.list({
+      calendarId: process.env.CALENDAR_ID, // Configura este en Render
+      timeMin: new Date().toISOString(),
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+    res.json(result.data.items);
+  } catch (err) {
+    console.error("Error al obtener eventos:", err);
+    res.status(500).send("Error al obtener eventos");
+  }
+});
 
-    const auth = await getAuthClient();
-    const calendar = google.calendar({ version: "v3", auth });
+// Ruta para crear evento
+app.post("/events", async (req, res) => {
+  try {
+    const { nombre, telefono, email, direccion, fecha, hora, servicio, nota } =
+      req.body;
+
+    const startDateTime = new Date(`${fecha}T${hora}:00`);
+    const endDateTime = new Date(startDateTime.getTime() + 60 * 60 * 1000); // 1h
 
     const event = {
       summary: `${servicio} - ${nombre}`,
       location: direccion,
-      description: `Notas: ${nota}\nTel: ${telefono}\nEmail: ${email}`,
-      start: {
-        dateTime: `${fecha}T${hora}:00-06:00`, // Ajusta zona horaria
-        timeZone: "America/Chicago",
-      },
-      end: {
-        dateTime: `${fecha}T${hora}:00-06:00`,
-        timeZone: "America/Chicago",
-      },
+      description: `Tel: ${telefono}\nEmail: ${email}\nNotas: ${nota}`,
+      start: { dateTime: startDateTime, timeZone: "America/Chicago" },
+      end: { dateTime: endDateTime, timeZone: "America/Chicago" },
     };
 
     const response = await calendar.events.insert({
-      auth,
-      calendarId,
-      resource: event,
+      calendarId: process.env.CALENDAR_ID,
+      requestBody: event,
     });
 
-    res.json({ success: true, eventId: response.data.id });
-  } catch (error) {
-    console.error("Error al crear evento:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.json(response.data);
+  } catch (err) {
+    console.error("Error al crear evento:", err);
+    res.status(500).send("Error al crear evento");
   }
 });
 
-// === RUTA: Obtener eventos ===
-app.get("/events", async (req, res) => {
-  try {
-    const auth = await getAuthClient();
-    const calendar = google.calendar({ version: "v3", auth });
-
-    const response = await calendar.events.list({
-      calendarId,
-      timeMin: new Date().toISOString(),
-      maxResults: 10,
-      singleEvents: true,
-      orderBy: "startTime",
-    });
-
-    res.json(response.data.items);
-  } catch (error) {
-    console.error("Error al listar eventos:", error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
+// Render usa su propio puerto
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`Servidor escuchando en puerto ${PORT}`);
 });
