@@ -8,11 +8,10 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "googleapis": "^126.0.1",
-    "cors": "^2.8.5",
+    "googleapis": "^131.0.0",
     "body-parser": "^1.20.2"
-  }
+  },
   "engines": {
-  "node": "18.x"
+    "node": "18.x"
   }
 }
