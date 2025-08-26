@@ -12,4 +12,7 @@
     "cors": "^2.8.5",
     "body-parser": "^1.20.2"
   }
+  "engines": {
+  "node": "18.x"
+  }
 }
