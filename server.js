@@ -1,45 +1,66 @@
 import express from "express";
+import cors from "cors";
 import { google } from "googleapis";
-import bodyParser from "body-parser";
+
+// Carga tus credenciales desde variable de entorno
+const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
 
 const app = express();
-app.use(bodyParser.json());
 
-// Configuración Google Calendar
-const SCOPES = ["https://www.googleapis.com/auth/calendar"];
-const jwtClient = new google.auth.JWT(
-  process.env.GOOGLE_CLIENT_EMAIL,
+// Configura CORS para tu frontend Netlify
+app.use(cors({
+  origin: "https://tu-frontend.netlify.app", // reemplaza con tu URL real
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+app.use(express.json());
+
+// Configura Google Calendar
+const auth = new google.auth.JWT(
+  serviceAccount.client_email,
   null,
-  process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  SCOPES
+  serviceAccount.private_key.replace(/\\n/g, "\n"), // importante para saltos de línea
+  ["https://www.googleapis.com/auth/calendar"]
 );
 
-const calendar = google.calendar({ version: "v3", auth: jwtClient });
+const calendar = google.calendar({ version: "v3", auth });
 
-// Ruta para crear evento
+// Ruta de prueba
+app.get("/", (req, res) => {
+  res.send("Backend funcionando correctamente en Render con Google Calendar!");
+});
+
+// Ruta para crear eventos
 app.post("/eventos", async (req, res) => {
   try {
     const { summary, description, start, end } = req.body;
+
+    if (!summary || !start || !end) {
+      return res.status(400).json({ message: "Faltan campos obligatorios: summary, start, end" });
+    }
+
+    const event = {
+      summary,
+      description,
+      start: { dateTime: start },
+      end: { dateTime: end }
+    };
+
     const response = await calendar.events.insert({
-      calendarId: "primary",
-      requestBody: {
-        summary,
-        description,
-        start: { dateTime: start },
-        end: { dateTime: end },
-      },
+      calendarId: "primary", // Puedes cambiar por un calendario específico
+      resource: event
     });
-    res.status(200).json({ message: "Evento creado", data: response.data });
+
+    res.status(201).json({ message: "Evento creado correctamente", evento: response.data });
   } catch (error) {
     console.error("Error al crear evento:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ message: "Error al crear evento", error: error.message });
   }
 });
 
-// Verificar servidor
-app.get("/", (req, res) => {
-  res.send("Servidor funcionando");
-});
-
+// Puerto dinámico de Render
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor corriendo en puerto ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Servidor escuchando en puerto ${PORT}`);
+});
