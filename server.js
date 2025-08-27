@@ -9,7 +9,7 @@ const app = express();
 
 // Configura CORS para tu frontend Netlify
 app.use(cors({
-  origin: "https://tu-frontend.netlify.app", // reemplaza con tu URL real
+  origin: "https://ccfamily.net", // reemplaza con tu URL real
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
